@@ -10,6 +10,20 @@ class O(object):
     def is_reducible(self):
         return self._REDUCIBLE
 
+class Environment(dict): pass
+
+class Variable(O):
+    _REDUCIBLE = True
+
+    def __init__(self, name):
+        self.name = name
+
+    def __str__(self):
+        return str(self.name)
+
+    def reduce(self, environment):
+        return environment[self.name]
+
 class Number(O):
     _REDUCIBLE = False
 
@@ -47,9 +61,9 @@ class AOPS(OPS):
     def value(self):
         return self.xs[0]
 
-    def reduce(self):
+    def reduce(self, environment):
         if self.value.is_reducible():
-            return self.__class__(self.value.reduce())
+            return self.__class__(self.value.reduce(environment))
         else:
             return self.TYPE(self.f(self.value))
 
@@ -76,11 +90,11 @@ class BOPS(OPS):
     def right(self):
         return self.xs[1]
 
-    def reduce(self):
+    def reduce(self, environment):
         if self.left.is_reducible():
-            return self.__class__(self.left.reduce(), self.right)
+            return self.__class__(self.left.reduce(environment), self.right)
         elif self.right.is_reducible():
-            return self.__class__(self.left, self.right.reduce())
+            return self.__class__(self.left, self.right.reduce(environment))
         else:
             return self.TYPE(self.f(self.left.value, self.right.value))
 
@@ -157,23 +171,37 @@ class Not(BooleanAOPS):
         super(Not, self).__init__('not', op.not_, value)
 
 class Machine(object):
-    def __init__(self, expression):
+    def __init__(self, expression, environment):
         self.expression = expression
+        self.environment = environment
+        self.count = 0
 
     def step(self):
-        self.expression = self.expression.reduce()
+        self.expression = self.expression.reduce(self.environment)
+        self.count += 1
 
     def run(self):
         while self.expression.is_reducible():
-            print self.expression
+            self.print_current_status()
             self.step()
-        print self.expression
+        self.print_current_status()
         return self.expression
 
+    def print_current_status(self):
+        print "[{}]: {}".format(self.count, self.expression)
+
 if __name__ == '__main__':
+    print "[!] Machine V0:"
     Machine(Add(Number(5),
                 Mul(Number(10),
-                    Number(5)))).run()
+                    Number(5))),
+            Environment()).run()
 
+    print "[!] Machine V1:"
     Machine(Not(Or(LT(Number(5), Number(10)),
-                   GE(Number(10), Number(22))))).run()
+                   GE(Number(10), Number(22)))),
+            Environment()).run()
+
+    print "[!] Machine V2:"
+    Machine(Variable("x"),
+            Environment(x=Number(5))).run()
