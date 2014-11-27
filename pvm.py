@@ -1,6 +1,8 @@
 #!/usr/bin/env python2.7
 import operator as op
 
+class Environment(dict): pass
+
 class O(object):
     _REDUCIBLE = False
 
@@ -10,7 +12,59 @@ class O(object):
     def is_reducible(self):
         return self._REDUCIBLE
 
-class Environment(dict): pass
+class OPS(O):
+    '''Operator Symbol'''
+    def __init__(self, n, f, xs):
+        self.n = n
+        self.f = f
+        self.xs = xs
+
+class DoNothing(O):
+    _REDUCIBLE = False
+
+    def __str__(self):
+        return 'do-nothing'
+
+    def __eq__(self, o):
+        return isinstance(o, DoNothing)
+
+class Assign(OPS):
+    _REDUCIBLE = True
+
+    def __init__(self, name, expression):
+        self.name = name
+        self.expression = expression
+
+    def __str__(self):
+        return '{} = {}'.format(self.name, str(self.expression))
+
+    def reduce(self, environment):
+        if self.expression.is_reducible():
+            return Assign(self.name, self.expression.reduce(environment)), environment
+        else:
+            _env = Environment(environment)
+            _env[self.name] = self.expression
+            return DoNothing(), _env
+
+class If(OPS):
+    _REDUCIBLE = True
+
+    def __init__(self, condition, consequence, alternative):
+        self.condition = condition
+        self.consequence = consequence
+        self.alternative = alternative
+
+    def __str__(self):
+        return 'if {} then {} else {}'.format(str(self.condition), str(self.consequence), str(self.alternative))
+
+    def reduce(self, environment):
+        if self.condition.is_reducible():
+            return If(self.condition.reduce(environment), self.consequence, self.alternative), environment
+        else:
+            if self.condition.value == True:
+                return self.consequence, environment
+            else:
+                return self.alternative, environment
 
 class Variable(O):
     _REDUCIBLE = True
@@ -42,13 +96,8 @@ class Boolean(O):
     def __str__(self):
         return str(self.value)
 
-class OPS(O):
-    def __init__(self, n, f, xs):
-        self.n = n
-        self.f = f
-        self.xs = xs
-
 class AOPS(OPS):
+    '''Unary Operator Symbol'''
     TYPE = None
 
     def __init__(self, n, f, value):
@@ -68,12 +117,15 @@ class AOPS(OPS):
             return self.TYPE(self.f(self.value))
 
 class AlgebraAOPS(AOPS):
+    '''Algebra Unary Operator Symbol'''
     TYPE = Number
 
 class BooleanAOPS(AOPS):
+    '''Boolean Unary Operator Symbol'''
     TYPE = Boolean
 
 class BOPS(OPS):
+    '''Binary Operator Symbol'''
     TYPE = None
 
     def __init__(self, n, f, left, right):
@@ -99,9 +151,11 @@ class BOPS(OPS):
             return self.TYPE(self.f(self.left.value, self.right.value))
 
 class AlgebraBOPS(BOPS):
+    '''Algebra Binary Operator Symbol'''
     TYPE = Number
 
 class BooleanBOPS(BOPS):
+    '''Boolean Binary Operator Symbol'''
     TYPE = Boolean
 
 class Add(AlgebraBOPS):
@@ -177,7 +231,7 @@ class Machine(object):
         self.count = 0
 
     def step(self):
-        self.expression = self.expression.reduce(self.environment)
+        self.expression, self.environment = self.expression.reduce(self.environment)
         self.count += 1
 
     def run(self):
@@ -188,20 +242,14 @@ class Machine(object):
         return self.expression
 
     def print_current_status(self):
-        print "[{}]: {}".format(self.count, self.expression)
+        print "[{}]: {}, {}".format(self.count, self.expression, self.environment)
 
 if __name__ == '__main__':
     print "[!] Machine V0:"
-    Machine(Add(Number(5),
-                Mul(Number(10),
-                    Number(5))),
-            Environment()).run()
+    Machine(Assign('x', Add(Variable('x'), Number(4))), Environment(x=Number(5))).run()
 
     print "[!] Machine V1:"
-    Machine(Not(Or(LT(Number(5), Number(10)),
-                   GE(Number(10), Number(22)))),
-            Environment()).run()
+    Machine(If(LT(Number(5), Number(4)), Assign('r', Boolean(True)), Assign('r', Boolean(False))), Environment()).run()
 
     print "[!] Machine V2:"
-    Machine(Variable("x"),
-            Environment(x=Number(5))).run()
+    Machine(If(LT(Number(4), Number(5)), Assign('r', Boolean(True)), Assign('r', Boolean(False))), Environment()).run()
