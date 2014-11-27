@@ -28,7 +28,7 @@ class DoNothing(O):
     def __eq__(self, o):
         return isinstance(o, DoNothing)
 
-class Assign(OPS):
+class Assign(O):
     _REDUCIBLE = True
 
     def __init__(self, name, expression):
@@ -46,7 +46,7 @@ class Assign(OPS):
             _env[self.name] = self.expression
             return DoNothing(), _env
 
-class If(OPS):
+class If(O):
     _REDUCIBLE = True
 
     def __init__(self, condition, consequence, alternative):
@@ -65,6 +65,23 @@ class If(OPS):
                 return self.consequence, environment
             else:
                 return self.alternative, environment
+
+class Sequence(O):
+    _REDUCIBLE = True
+
+    def __init__(self, first, second):
+        self.first = first
+        self.second = second
+
+    def __str__(self):
+        return '{}; {}'.format(str(self.first), str(self.second))
+
+    def reduce(self, environment):
+        if self.first == DoNothing():
+            return self.second, environment
+        else:
+            reduced_first, reduced_environment = self.first.reduce(environment)
+            return Sequence(reduced_first, self.second), reduced_environment
 
 class Variable(O):
     _REDUCIBLE = True
@@ -252,4 +269,7 @@ if __name__ == '__main__':
     Machine(If(LT(Number(5), Number(4)), Assign('r', Boolean(True)), Assign('r', Boolean(False))), Environment()).run()
 
     print "[!] Machine V2:"
-    Machine(If(LT(Number(4), Number(5)), Assign('r', Boolean(True)), Assign('r', Boolean(False))), Environment()).run()
+    Machine(If(LT(Variable('x'), Number(5)), Assign('r', Add(Number(4), Mul(Number(1), Variable('x')))), Assign('r', Boolean(False))), Environment(x=Number(4))).run()
+
+    print "[!] Machine V3:"
+    Machine(Sequence(Assign('x', Number(5)), Assign('y', Number(6))), Environment()).run()
